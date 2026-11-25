@@ -101,14 +101,15 @@ class SiameseNet(nn.Module):
         # Layer 4: diff_max (512) + diff_avg (512) + cos_dist (1) = 1025
         # Total in_features = 512 + 1025 = 1537
         self.head = nn.Sequential(
+            nn.BatchNorm1d(1537),
             nn.Linear(1537, 256),
-            nn.LayerNorm(256),
+            nn.BatchNorm1d(256),
+            nn.GELU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
             nn.GELU(),
             nn.Dropout(0.2),
-            nn.Linear(256, 64),
-            nn.LayerNorm(64),
-            nn.GELU(),
-            nn.Dropout(0.1),
             nn.Linear(64, 1)  # Single logit output
         )
 
