@@ -3,8 +3,11 @@ Stroke-X: Brain CTA Stroke Triage Dashboard
 Clean, color-coded clinical UI supporting single and full-output batch upload.
 """
 
+import io
 import json
+import os
 import time
+import zipfile
 
 import cv2
 import numpy as np
@@ -254,6 +257,7 @@ def render_single_result(
             st.markdown(f"- {rec}")
 
         st.markdown("---")
+        safe_file_id = os.path.basename(case_name)
         dl1, dl2, dl3 = st.columns(3)
         with dl1:
             export_img = result.diagnostic_overlay if show_mask else (
@@ -264,7 +268,7 @@ def render_single_result(
                 st.download_button(
                     "Download Result Image (PNG)",
                     data=enc_img.tobytes(),
-                    file_name=f"{case_name}_result.png",
+                    file_name=f"{safe_file_id}_result.png",
                     mime="image/png",
                     key=f"{key_prefix}_png",
                     use_container_width=True,
@@ -274,7 +278,7 @@ def render_single_result(
             st.download_button(
                 "Printable Report (HTML / PDF)",
                 data=html_report,
-                file_name=f"{case_name}_report.html",
+                file_name=f"{safe_file_id}_report.html",
                 mime="text/html",
                 key=f"{key_prefix}_html",
                 use_container_width=True,
@@ -283,24 +287,79 @@ def render_single_result(
             st.download_button(
                 "Download Data (JSON)",
                 data=json.dumps(result.to_dict(), indent=2),
-                file_name=f"{case_name}_report.json",
+                file_name=f"{safe_file_id}_report.json",
                 mime="application/json",
                 key=f"{key_prefix}_json",
                 use_container_width=True,
             )
 
 
+def extract_scans_from_uploads(uploaded_items) -> list[tuple[str, bytes]]:
+    """Extracts image scans from uploaded files, directories, and ZIP archives."""
+    valid_exts = {".jpeg", ".jpg", ".png", ".bmp", ".tif", ".tiff"}
+    scans = []
+    seen = set()
+
+    for uf in uploaded_items:
+        name = uf.name
+        raw = uf.getvalue()
+        ext = os.path.splitext(name)[1].lower()
+
+        if ext == ".zip":
+            try:
+                with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                    for member in sorted(zf.namelist()):
+                        base = os.path.basename(member)
+                        if not base or base.startswith(".") or "__MACOSX" in member:
+                            continue
+                        if os.path.splitext(base)[1].lower() in valid_exts:
+                            data = zf.read(member)
+                            sig = (member, len(data))
+                            if sig not in seen:
+                                seen.add(sig)
+                                scans.append((member, data))
+            except zipfile.BadZipFile:
+                st.warning(f"Skipped invalid ZIP archive: {name}")
+        elif ext in valid_exts:
+            base = os.path.basename(name)
+            if not base.startswith("."):
+                sig = (name, len(raw))
+                if sig not in seen:
+                    seen.add(sig)
+                    scans.append((name, raw))
+
+    return scans
+
+
 # ------------------------------------------------------------
-# 3. Sidebar: Upload (Single or Batch) & View Controls
+# 3. Sidebar: Upload (Single, Multi-File, Multi-Folder, ZIP)
 # ------------------------------------------------------------
 st.sidebar.markdown("### Stroke-X Controls")
-st.sidebar.caption("Upload one scan for single review, or multiple scans for batch triage.")
+st.sidebar.caption("Upload individual scans, ZIP archives, or entire folders.")
 
-uploaded_files = st.sidebar.file_uploader(
-    "Upload CTA Scan(s)",
-    type=["jpeg", "jpg", "png", "bmp", "tiff", "tif"],
-    accept_multiple_files=True,
+upload_mode = st.sidebar.radio(
+    "Upload Mode",
+    ["Folders", "Files / ZIP"],
+    horizontal=True,
 )
+
+if upload_mode == "Folders":
+    uploaded_files = st.sidebar.file_uploader(
+        "Select Folder(s) of CTA Scans",
+        type=["jpeg", "jpg", "png", "bmp", "tiff", "tif"],
+        accept_multiple_files="directory",
+        key="folder_uploader",
+        help="Select a folder (or click Browse multiple times to add multiple folders).",
+    )
+    st.sidebar.caption("Tip: Click Browse again to add more folders.")
+else:
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload CTA Scan(s) or ZIP",
+        type=["jpeg", "jpg", "png", "bmp", "tiff", "tif", "zip"],
+        accept_multiple_files=True,
+        key="file_uploader",
+        help="Upload 1 or more images, or a .zip archive containing multiple folders.",
+    )
 
 st.sidebar.markdown("---")
 show_mask = st.sidebar.toggle(
@@ -340,122 +399,120 @@ st.markdown(
 )
 
 if not uploaded_files:
-    st.info("Upload one or more CTA scan images in the sidebar to begin analysis.")
-    st.stop()
-
-scan_queue = [(uf.name, uf.getvalue()) for uf in uploaded_files]
-total_scans = len(scan_queue)
-
-# --- SINGLE MODE ---
-if total_scans == 1:
-    case_name, img_bytes = scan_queue[0]
-    with st.spinner(f"Analyzing {case_name}..."):
-        res = analyze_cached(img_bytes, case_name, asym_threshold, bbox_threshold)
-    render_single_result(case_name, res, show_mask=show_mask, key_prefix="single_0", expanded_recs=True)
-
-# --- BATCH MODE (SHOWS ALL OUTPUTS) ---
+    st.info("Upload one or more CTA scan images or folders in the sidebar to begin analysis.")
 else:
-    progress_bar = st.progress(0, text="Starting batch analysis...")
-    t_batch_start = time.time()
-    results_list = []
+    scan_queue = extract_scans_from_uploads(uploaded_files)
+    total_scans = len(scan_queue)
 
-    for idx, (case_name, img_bytes) in enumerate(scan_queue):
-        progress_bar.progress(
-            idx / total_scans,
-            text=f"Analyzing scan {idx + 1} of {total_scans}: {case_name}...",
-        )
-        res = analyze_cached(img_bytes, case_name, asym_threshold, bbox_threshold)
-        results_list.append((case_name, res))
+    if total_scans == 0:
+        st.warning("No valid CTA scan images found in the uploaded selection.")
+    elif total_scans == 1:
+        case_name, img_bytes = scan_queue[0]
+        with st.spinner(f"Analyzing {case_name}..."):
+            res = analyze_cached(img_bytes, case_name, asym_threshold, bbox_threshold)
+        render_single_result(case_name, res, show_mask=show_mask, key_prefix="single_0", expanded_recs=True)
+    else:
+        progress_bar = st.progress(0, text="Starting batch analysis...")
+        t_batch_start = time.time()
+        results_list = []
 
-    progress_bar.progress(1.0, text=f"Completed {total_scans} scans")
-    total_elapsed = time.time() - t_batch_start
+        for idx, (case_name, img_bytes) in enumerate(scan_queue):
+            progress_bar.progress(
+                idx / total_scans,
+                text=f"Analyzing scan {idx + 1} of {total_scans}: {case_name}...",
+            )
+            res = analyze_cached(img_bytes, case_name, asym_threshold, bbox_threshold)
+            results_list.append((case_name, res))
 
-    # Batch Summary Metrics
-    flagged_count = sum(1 for _, r in results_list if r.success and r.snn_class == "STROKE")
-    normal_count = sum(1 for _, r in results_list if r.success and r.snn_class == "HEALTHY")
-    failed_count = sum(1 for _, r in results_list if not r.success)
+        progress_bar.progress(1.0, text=f"Completed {total_scans} scans")
+        total_elapsed = time.time() - t_batch_start
 
-    st.markdown("### Batch Triage Summary")
-    b1, b2, b3, b4 = st.columns(4)
-    render_metric_card(b1, "Total Scans", str(total_scans), "")
-    render_metric_card(b2, "Flagged (Stroke Risk)", str(flagged_count), "red" if flagged_count > 0 else "")
-    render_metric_card(b3, "Normal (Symmetrical)", str(normal_count), "green" if normal_count > 0 else "")
-    render_metric_card(b4, "Total Time", f"{total_elapsed:.1f}s", "slate")
+        # Batch Summary Metrics
+        flagged_count = sum(1 for _, r in results_list if r.success and r.snn_class == "STROKE")
+        normal_count = sum(1 for _, r in results_list if r.success and r.snn_class == "HEALTHY")
+        failed_count = sum(1 for _, r in results_list if not r.success)
 
-    if failed_count > 0:
-        st.warning(f"{failed_count} scan(s) could not be processed.")
+        st.markdown("### Batch Triage Summary")
+        b1, b2, b3, b4 = st.columns(4)
+        render_metric_card(b1, "Total Scans", str(total_scans), "")
+        render_metric_card(b2, "Flagged (Stroke Risk)", str(flagged_count), "red" if flagged_count > 0 else "")
+        render_metric_card(b3, "Normal (Symmetrical)", str(normal_count), "green" if normal_count > 0 else "")
+        render_metric_card(b4, "Total Time", f"{total_elapsed:.1f}s", "slate")
 
-    # Build Sorted Summary Table (Flagged cases first, highest SNN score at top)
-    sorted_items = []
-    for case_name, r in results_list:
-        if r.success:
-            priority = 0 if r.snn_class == "STROKE" else 1
-            status_str = "STROKE RISK" if r.snn_class == "STROKE" else "NORMAL"
-            row = {
-                "Scan": case_name,
-                "Status": status_str,
-                "Affected Side": r.affected_side,
-                "SNN Score (%)": round(r.snn_prob * 100, 1),
-                "Time (s)": round(r.execution_time_sec, 2),
-            }
-            sorted_items.append((priority, -(r.snn_prob * 100), case_name, r, row))
-        else:
-            row = {
-                "Scan": case_name,
-                "Status": "ERROR",
-                "Affected Side": "-",
-                "SNN Score (%)": 0.0,
-                "Time (s)": round(r.execution_time_sec, 2),
-            }
-            sorted_items.append((2, 0.0, case_name, r, row))
+        if failed_count > 0:
+            st.warning(f"{failed_count} scan(s) could not be processed.")
 
-    sorted_items.sort(key=lambda x: (x[0], x[1], x[2]))
-    df_display = pd.DataFrame([item[4] for item in sorted_items])
+        # Build Sorted Summary Table (Flagged cases first, highest SNN score at top)
+        sorted_items = []
+        for case_name, r in results_list:
+            if r.success:
+                priority = 0 if r.snn_class == "STROKE" else 1
+                status_str = "STROKE RISK" if r.snn_class == "STROKE" else "NORMAL"
+                row = {
+                    "Scan": case_name,
+                    "Status": status_str,
+                    "Affected Side": r.affected_side,
+                    "SNN Score (%)": round(r.snn_prob * 100, 1),
+                    "Time (s)": round(r.execution_time_sec, 2),
+                }
+                sorted_items.append((priority, -(r.snn_prob * 100), case_name, r, row))
+            else:
+                row = {
+                    "Scan": case_name,
+                    "Status": "ERROR",
+                    "Affected Side": "-",
+                    "SNN Score (%)": 0.0,
+                    "Time (s)": round(r.execution_time_sec, 2),
+                }
+                sorted_items.append((2, 0.0, case_name, r, row))
 
-    def style_status(val):
-        if val == "STROKE RISK":
-            return "background-color: #fee2e2; color: #991b1b; font-weight: 700;"
-        if val == "NORMAL":
-            return "background-color: #dcfce7; color: #166534; font-weight: 700;"
-        return "background-color: #f1f5f9; color: #475569;"
+        sorted_items.sort(key=lambda x: (x[0], x[1], x[2]))
+        df_display = pd.DataFrame([item[4] for item in sorted_items])
 
-    st.dataframe(
-        df_display.style.map(style_status, subset=["Status"]),
-        use_container_width=True,
-        hide_index=True,
-    )
+        def style_status(val):
+            if val == "STROKE RISK":
+                return "background-color: #fee2e2; color: #991b1b; font-weight: 700;"
+            if val == "NORMAL":
+                return "background-color: #dcfce7; color: #166534; font-weight: 700;"
+            return "background-color: #f1f5f9; color: #475569;"
 
-    # Batch Export Buttons
-    exp1, exp2 = st.columns(2)
-    with exp1:
-        st.download_button(
-            "Download Batch Summary (CSV)",
-            data=df_display.to_csv(index=False),
-            file_name="stroke_x_batch_summary.csv",
-            mime="text/csv",
+        st.dataframe(
+            df_display.style.map(style_status, subset=["Status"]),
             use_container_width=True,
-        )
-    with exp2:
-        batch_json = json.dumps(
-            [{"scan": name, **r.to_dict()} for _, _, name, r, _ in sorted_items], indent=2
-        )
-        st.download_button(
-            "Download All Results (JSON)",
-            data=batch_json,
-            file_name="stroke_x_batch_results.json",
-            mime="application/json",
-            use_container_width=True,
+            hide_index=True,
         )
 
-    # Render ALL Batch Outputs directly
-    st.markdown("### All Scan Results")
-    for idx, (_, _, case_name, res, _) in enumerate(sorted_items):
-        if idx > 0:
-            st.markdown('<div class="case-divider"></div>', unsafe_allow_html=True)
-        render_single_result(
-            case_name,
-            res,
-            show_mask=show_mask,
-            key_prefix=f"batch_{idx}",
-            expanded_recs=False,
-        )
+        # Batch Export Buttons
+        exp1, exp2 = st.columns(2)
+        with exp1:
+            st.download_button(
+                "Download Batch Summary (CSV)",
+                data=df_display.to_csv(index=False),
+                file_name="stroke_x_batch_summary.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with exp2:
+            batch_json = json.dumps(
+                [{"scan": name, **r.to_dict()} for _, _, name, r, _ in sorted_items], indent=2
+            )
+            st.download_button(
+                "Download All Results (JSON)",
+                data=batch_json,
+                file_name="stroke_x_batch_results.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+
+        # Render ALL Batch Outputs directly
+        st.markdown("### All Scan Results")
+        for idx, (_, _, case_name, res, _) in enumerate(sorted_items):
+            if idx > 0:
+                st.markdown('<div class="case-divider"></div>', unsafe_allow_html=True)
+            render_single_result(
+                case_name,
+                res,
+                show_mask=show_mask,
+                key_prefix=f"batch_{idx}",
+                expanded_recs=False,
+            )
