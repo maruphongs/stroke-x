@@ -440,14 +440,11 @@ def calculate_asymmetry(
             # Mark in combined deficit mask
             cv2.drawContours(miss_mask_combined, [c], -1, 255, -1)
 
-            # Opacity scales via tight growth curve: 0.35 (small/minor) to 0.95 (massive severe)
-            base_alpha = (0.35 + 0.60 * growth) * (0.80 + 0.20 * scale_weight)
+            # Opacity scales via tight growth curve: 0.35 (small/minor) to 0.80 (massive severe)
+            base_alpha = (0.35 + 0.45 * growth) * (0.80 + 0.20 * scale_weight)
 
-            # Color transitions via tight growth curve: Soft Gold/Amber (0, 210, 255) -> Fiery Orange (0, 110, 255) -> Vivid Crimson (0, 0, 255)
-            g_val = float(210.0 * (1.0 - (growth ** 1.4)))
-            b_val = float(20.0 * (1.0 - growth))
-            r_val = 255.0
-            blob_color = (b_val, g_val, r_val)
+            # Consistent single-color red mask (BGR: 0, 0, 255)
+            blob_color = (0.0, 0.0, 255.0)
 
             # Draw contour mask for this blob
             full_c_mask = np.zeros((h, w), dtype=np.uint8)
@@ -463,21 +460,11 @@ def calculate_asymmetry(
             if growth >= 0.65 and asym >= bbox_thresh and area >= min_area:
                 cand_boxes.append((bx, by, bw, bh, asym, area))
 
-    # Blend multi-kernel deficit overlay with original image
+    # Blend multi-kernel deficit overlay with original image (pure red mask only)
     alpha_3ch = np.repeat(alpha_mask[:, :, np.newaxis], 3, axis=2)
     output_img = (overlay * alpha_3ch + output_img.astype(np.float32) * (1.0 - alpha_3ch)).clip(0, 255).astype(np.uint8)
 
-    # 5b. Pruned Skeleton Overlay (rendered with low opacity for reference)
-    # Pruned spurs/branches: spurs removed during skeleton cleanup
-    _pruned_spurs = cv2.bitwise_and(raw_skel, cv2.bitwise_not(clean_skel))
-    # Render clean skeleton in soft cyan/green with gentle opacity (0.45)
-    pruned_overlay = output_img.copy()
-    pruned_overlay[clean_skel > 0] = (0, 230, 120)
-
-    # Blend skeleton overlay with low opacity (35% pruned overlay, 65% base image)
-    output_img = cv2.addWeighted(pruned_overlay, 0.35, output_img, 0.65, 0)
-
-    # 5c. Filtered high-deficit candidate regions (red bounding box rendering removed for visual consistency)
+    # 5c. Filtered high-deficit candidate regions
     merged_boxes = merge_boxes_compact(cand_boxes, iou_thresh=0.10, dist_thresh=12)
     filtered_boxes = [b for b in merged_boxes if b[4] >= bbox_thresh and b[5] >= min_bbox_area]
 
@@ -666,7 +653,17 @@ def calculate_asymmetry(
     global LAST_ASYMMETRY_PROFILE, LAST_BOUNDING_BOXES
     LAST_ASYMMETRY_PROFILE = profile
 
-    boxes_meta = []
+    boxes_meta = [
+        {
+            "x": int(bx),
+            "y": int(by),
+            "w": int(bw),
+            "h": int(bh),
+            "asymmetry": round(float(asym), 1),
+            "area": float(area),
+        }
+        for (bx, by, bw, bh, asym, area) in filtered_boxes
+    ]
     LAST_BOUNDING_BOXES = boxes_meta
 
     all_panels = [p1, p2, p3, p4, p5, p6]

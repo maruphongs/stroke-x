@@ -1,6 +1,6 @@
 """
-Stroke-X: Simple & Fast Brain CTA Stroke Triage Dashboard
-Supports both single-scan analysis and multi-scan batch triage.
+Stroke-X: Brain CTA Stroke Triage Dashboard
+Clean, color-coded clinical UI supporting single and full-output batch analysis.
 """
 
 import json
@@ -16,11 +16,10 @@ from engine import StrokeAnalysisResult, run_stroke_pipeline
 from exporter import generate_clinical_html_report
 
 # ------------------------------------------------------------
-# 1. Page Configuration & Clean Styling
+# 1. Page Configuration & Color-Coded Medical Styling
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Stroke-X | Brain CTA Triage",
-    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -28,36 +27,112 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    .app-banner {
+        background: linear-gradient(90deg, #0f172a 0%, #1e3a8a 100%);
+        color: #ffffff;
+        padding: 18px 24px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    .app-banner h1 {
+        color: #ffffff;
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .app-banner p {
+        color: #cbd5e1;
+        font-size: 0.95rem;
+        margin: 4px 0 0 0;
+    }
     .verdict-box-stroke {
         background-color: #fef2f2;
+        border: 1px solid #fecaca;
         border-left: 6px solid #dc2626;
-        padding: 16px 20px;
+        padding: 14px 18px;
         border-radius: 8px;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
     }
     .verdict-box-normal {
         background-color: #f0fdf4;
+        border: 1px solid #bbf7d0;
         border-left: 6px solid #16a34a;
-        padding: 16px 20px;
+        padding: 14px 18px;
         border-radius: 8px;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
     }
     .verdict-title-stroke {
         color: #991b1b;
-        font-size: 1.35rem;
+        font-size: 1.2rem;
         font-weight: 700;
         margin: 0;
     }
     .verdict-title-normal {
         color: #166534;
-        font-size: 1.35rem;
+        font-size: 1.2rem;
         font-weight: 700;
         margin: 0;
     }
     .verdict-sub {
         color: #475569;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         margin-top: 4px;
+    }
+    .metric-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-top: 4px solid #3b82f6;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+    }
+    .metric-card.red {
+        border-top-color: #dc2626;
+        background-color: #fffafa;
+    }
+    .metric-card.green {
+        border-top-color: #16a34a;
+        background-color: #f9fefb;
+    }
+    .metric-card.slate {
+        border-top-color: #475569;
+    }
+    .metric-label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    .metric-value {
+        font-size: 1.55rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .metric-value.red { color: #b91c1c; }
+    .metric-value.green { color: #15803d; }
+    .pill {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+    }
+    .pill-red {
+        background-color: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #f87171;
+    }
+    .pill-green {
+        background-color: #dcfce7;
+        color: #166534;
+        border: 1px solid #4ade80;
+    }
+    .case-divider {
+        border-top: 2px solid #e2e8f0;
+        margin: 24px 0 20px 0;
     }
     </style>
     """,
@@ -100,15 +175,30 @@ def bgr_to_rgb(img_bgr: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
 
-def render_single_result(case_name: str, result: StrokeAnalysisResult):
-    """Renders a clean, easy-to-understand diagnostic view for one scan."""
+def render_metric_card(col, label: str, value: str, accent: str = ""):
+    card_cls = f"metric-card {accent}".strip()
+    val_cls = f"metric-value {accent}".strip()
+    col.markdown(
+        f"""
+        <div class="{card_cls}">
+            <div class="metric-label">{label}</div>
+            <div class="{val_cls}">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_single_result(case_name: str, result: StrokeAnalysisResult, key_prefix: str = "single", expanded_recs: bool = True):
+    """Renders a clean, color-coded diagnostic view for one scan."""
     if not result.success:
-        st.error(f"❌ Could not analyze **{case_name}**: {result.error}")
+        st.error(f"Could not analyze {case_name}: {result.error}")
         return
 
     is_stroke = result.snn_class == "STROKE"
+    accent = "red" if is_stroke else "green"
 
-    # 1. Clear Verdict Banner
+    # 1. Color-coded Verdict Banner
     if is_stroke:
         side_txt = (
             f"{result.affected_side} Hemisphere"
@@ -118,7 +208,9 @@ def render_single_result(case_name: str, result: StrokeAnalysisResult):
         st.markdown(
             f"""
             <div class="verdict-box-stroke">
-                <div class="verdict-title-stroke">⚠️ Asymmetry Detected — {side_txt}</div>
+                <div class="verdict-title-stroke">
+                    <span class="pill pill-red">ASYMMETRY DETECTED</span> &nbsp; {side_txt}
+                </div>
                 <div class="verdict-sub">Case: <b>{case_name}</b> &bull; Possible acute ischemic stroke / vessel occlusion</div>
             </div>
             """,
@@ -128,33 +220,34 @@ def render_single_result(case_name: str, result: StrokeAnalysisResult):
         st.markdown(
             f"""
             <div class="verdict-box-normal">
-                <div class="verdict-title-normal">✅ Symmetrical Scan — No Significant Deficit</div>
+                <div class="verdict-title-normal">
+                    <span class="pill pill-green">SYMMETRICAL SCAN</span> &nbsp; No Significant Deficit
+                </div>
                 <div class="verdict-sub">Case: <b>{case_name}</b> &bull; Bilateral intracranial vessels appear balanced</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    # 2. Three Simple Key Metrics
+    # 2. Color-coded Key Metrics
     c1, c2, c3 = st.columns(3)
-    c1.metric("AI Stroke Risk Score", f"{result.snn_prob * 100:.1f}%")
-    c2.metric("Affected Hemisphere", result.affected_side)
-    c3.metric("Highlighted Deficit Areas", f"{len(result.bounding_boxes)}")
+    render_metric_card(c1, "AI Stroke Risk Score", f"{result.snn_prob * 100:.1f}%", accent)
+    render_metric_card(c2, "Affected Hemisphere", result.affected_side, accent)
+    render_metric_card(c3, "Highlighted Deficit Areas", str(len(result.bounding_boxes)), accent)
 
-    # 3. Side-by-Side Image Comparison (Original vs AI Result)
-    st.markdown("#### Visual Comparison")
+    # 3. Side-by-Side Visual Comparison (Original vs Red Mask Result)
     img_col1, img_col2 = st.columns(2)
     with img_col1:
         st.markdown("**Original CTA Scan**")
         if result.original_image is not None:
             st.image(bgr_to_rgb(result.original_image), use_container_width=True)
     with img_col2:
-        st.markdown("**AI Result (Highlighted Deficit Areas)**")
+        st.markdown("**AI Result (Red Deficit Highlight)**")
         if result.diagnostic_overlay is not None:
             st.image(bgr_to_rgb(result.diagnostic_overlay), use_container_width=True)
 
-    # 4. Clinical Next Steps & Export
-    with st.expander("📋 Clinical Guidance & Export Report", expanded=True):
+    # 4. Clinical Guidance & Exports
+    with st.expander(f"Clinical Guidance & Export — {case_name}", expanded=expanded_recs):
         for rec in result.recommendations:
             st.markdown(f"- {rec}")
 
@@ -164,50 +257,52 @@ def render_single_result(case_name: str, result: StrokeAnalysisResult):
             if result.diagnostic_overlay is not None:
                 _, enc_img = cv2.imencode(".png", result.diagnostic_overlay)
                 st.download_button(
-                    "🖼️ Download Result Image (PNG)",
+                    "Download Result Image (PNG)",
                     data=enc_img.tobytes(),
                     file_name=f"{case_name}_result.png",
                     mime="image/png",
+                    key=f"{key_prefix}_png",
                     use_container_width=True,
                 )
         with dl2:
             html_report = generate_clinical_html_report(result=result, case_id=case_name)
             st.download_button(
-                "📑 Printable Report (HTML / PDF)",
+                "Printable Report (HTML / PDF)",
                 data=html_report,
                 file_name=f"{case_name}_report.html",
                 mime="text/html",
+                key=f"{key_prefix}_html",
                 use_container_width=True,
             )
         with dl3:
             st.download_button(
-                "📄 Download Data (JSON)",
+                "Download Data (JSON)",
                 data=json.dumps(result.to_dict(), indent=2),
                 file_name=f"{case_name}_report.json",
                 mime="application/json",
+                key=f"{key_prefix}_json",
                 use_container_width=True,
             )
 
 
 # ------------------------------------------------------------
-# 3. Sidebar: Upload (Single or Batch) & Optional Settings
+# 3. Sidebar: Upload (Single or Batch) & Settings
 # ------------------------------------------------------------
-st.sidebar.title("🧠 Stroke-X")
-st.sidebar.caption("Fast Brain CTA Stroke Triage")
+st.sidebar.markdown("### Stroke-X Controls")
+st.sidebar.caption("Upload one scan for single review, or multiple scans for batch triage.")
 
 uploaded_files = st.sidebar.file_uploader(
     "Upload CTA Scan(s)",
     type=["jpeg", "jpg", "png", "bmp", "tiff", "tif"],
     accept_multiple_files=True,
-    help="Upload 1 image for single analysis, or multiple images for batch triage.",
 )
 
 sample_dict = get_sample_scans()
 selected_samples = []
 if sample_dict and not uploaded_files:
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Or Try Sample Scans**")
-    run_all_samples = st.sidebar.checkbox("Select all sample scans (Batch demo)", value=False)
+    st.sidebar.markdown("**Sample Cohort Scans**")
+    run_all_samples = st.sidebar.checkbox("Select all sample scans (Batch)", value=False)
     if run_all_samples:
         selected_samples = list(sample_dict.keys())
         st.sidebar.info(f"Selected all {len(selected_samples)} sample scans.")
@@ -219,7 +314,7 @@ if sample_dict and not uploaded_files:
             default=default_sample,
         )
 
-with st.sidebar.expander("⚙️ Advanced Settings", expanded=False):
+with st.sidebar.expander("Advanced Settings", expanded=False):
     asym_threshold = st.slider(
         "Stroke Sensitivity Cutoff (%)",
         min_value=20.0,
@@ -237,12 +332,19 @@ with st.sidebar.expander("⚙️ Advanced Settings", expanded=False):
 
 
 # ------------------------------------------------------------
-# 4. Main Area: Build Queue & Run Analysis
+# 4. Main Area: Banner, Queue & Results
 # ------------------------------------------------------------
-st.title("🧠 Stroke-X Brain CTA Triage")
-st.caption("Upload a single CTA scan or a batch of scans to screen for acute stroke asymmetry.")
+st.markdown(
+    """
+    <div class="app-banner">
+        <h1>Stroke-X Brain CTA Triage</h1>
+        <p>Automated Acute Ischemic Stroke &amp; Large Vessel Occlusion Screening</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# Build list of (case_name, image_input)
+# Build queue
 scan_queue = []
 if uploaded_files:
     for uf in uploaded_files:
@@ -253,13 +355,12 @@ elif selected_samples:
         scan_queue.append((case_name, sample_dict[key]))
 
 if not scan_queue:
-    st.info("👈 Upload one or more CTA scan images in the sidebar (or choose sample scans) to start.")
+    st.info("Upload one or more CTA scan images in the sidebar (or choose sample scans) to start.")
     st.stop()
 
-# Run inference (single or batch)
-results_list = []
 total_scans = len(scan_queue)
 
+# --- SINGLE MODE ---
 if total_scans == 1:
     case_name, img_data = scan_queue[0]
     with st.spinner(f"Analyzing {case_name}..."):
@@ -270,12 +371,13 @@ if total_scans == 1:
             bbox_threshold=bbox_threshold,
             generate_composite=False,
         )
-    render_single_result(case_name, res)
+    render_single_result(case_name, res, key_prefix="single_0", expanded_recs=True)
 
+# --- BATCH MODE (SHOWS ALL OUTPUTS) ---
 else:
-    # Batch Mode
     progress_bar = st.progress(0, text="Starting batch analysis...")
     t_batch_start = time.time()
+    results_list = []
 
     for idx, (case_name, img_data) in enumerate(scan_queue):
         progress_bar.progress(
@@ -291,7 +393,7 @@ else:
         )
         results_list.append((case_name, res))
 
-    progress_bar.progress(1.0, text=f"Completed {total_scans} scans!")
+    progress_bar.progress(1.0, text=f"Completed {total_scans} scans")
     total_elapsed = time.time() - t_batch_start
 
     # Batch Summary Metrics
@@ -299,56 +401,64 @@ else:
     normal_count = sum(1 for _, r in results_list if r.success and r.snn_class == "HEALTHY")
     failed_count = sum(1 for _, r in results_list if not r.success)
 
-    st.markdown("### 📊 Batch Triage Summary")
+    st.markdown("### Batch Triage Summary")
     b1, b2, b3, b4 = st.columns(4)
-    b1.metric("Total Scans", total_scans)
-    b2.metric("Flagged (Stroke Risk)", flagged_count)
-    b3.metric("Normal (Symmetrical)", normal_count)
-    b4.metric("Total Time", f"{total_elapsed:.1f}s")
+    render_metric_card(b1, "Total Scans", str(total_scans), "")
+    render_metric_card(b2, "Flagged (Stroke Risk)", str(flagged_count), "red" if flagged_count > 0 else "")
+    render_metric_card(b3, "Normal (Symmetrical)", str(normal_count), "green" if normal_count > 0 else "")
+    render_metric_card(b4, "Total Time", f"{total_elapsed:.1f}s", "slate")
 
     if failed_count > 0:
         st.warning(f"{failed_count} scan(s) could not be processed.")
 
-    # Build Summary Table (sorted: Flagged cases first, highest risk at top)
+    # Build Sorted Summary Table (Flagged cases first, highest risk at top)
     table_rows = []
+    sorted_items = []
     for case_name, r in results_list:
         if r.success:
-            status_str = "⚠️ STROKE RISK" if r.snn_class == "STROKE" else "✅ NORMAL"
-            table_rows.append(
-                {
-                    "Scan": case_name,
-                    "Status": status_str,
-                    "Affected Side": r.affected_side,
-                    "Stroke Risk (%)": round(r.snn_prob * 100, 1),
-                    "Deficit Areas": len(r.bounding_boxes),
-                    "Time (s)": round(r.execution_time_sec, 2),
-                    "_sort_priority": 0 if r.snn_class == "STROKE" else 1,
-                }
-            )
+            priority = 0 if r.snn_class == "STROKE" else 1
+            status_str = "STROKE RISK" if r.snn_class == "STROKE" else "NORMAL"
+            row = {
+                "Scan": case_name,
+                "Status": status_str,
+                "Affected Side": r.affected_side,
+                "Stroke Risk (%)": round(r.snn_prob * 100, 1),
+                "Deficit Areas": len(r.bounding_boxes),
+                "Time (s)": round(r.execution_time_sec, 2),
+            }
+            sorted_items.append((priority, -(r.snn_prob * 100), case_name, r, row))
         else:
-            table_rows.append(
-                {
-                    "Scan": case_name,
-                    "Status": "❌ ERROR",
-                    "Affected Side": "-",
-                    "Stroke Risk (%)": 0.0,
-                    "Deficit Areas": 0,
-                    "Time (s)": round(r.execution_time_sec, 2),
-                    "_sort_priority": 2,
-                }
-            )
+            row = {
+                "Scan": case_name,
+                "Status": "ERROR",
+                "Affected Side": "-",
+                "Stroke Risk (%)": 0.0,
+                "Deficit Areas": 0,
+                "Time (s)": round(r.execution_time_sec, 2),
+            }
+            sorted_items.append((2, 0.0, case_name, r, row))
 
-    df_batch = pd.DataFrame(table_rows).sort_values(
-        by=["_sort_priority", "Stroke Risk (%)"], ascending=[True, False]
+    sorted_items.sort(key=lambda x: (x[0], x[1], x[2]))
+    df_display = pd.DataFrame([item[4] for item in sorted_items])
+
+    def style_status(val):
+        if val == "STROKE RISK":
+            return "background-color: #fee2e2; color: #991b1b; font-weight: 700;"
+        if val == "NORMAL":
+            return "background-color: #dcfce7; color: #166534; font-weight: 700;"
+        return "background-color: #f1f5f9; color: #475569;"
+
+    st.dataframe(
+        df_display.style.map(style_status, subset=["Status"]),
+        use_container_width=True,
+        hide_index=True,
     )
-    df_display = df_batch.drop(columns=["_sort_priority"])
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     # Batch Export Buttons
     exp1, exp2 = st.columns(2)
     with exp1:
         st.download_button(
-            "📊 Download Batch Summary (CSV)",
+            "Download Batch Summary (CSV)",
             data=df_display.to_csv(index=False),
             file_name="stroke_x_batch_summary.csv",
             mime="text/csv",
@@ -356,22 +466,19 @@ else:
         )
     with exp2:
         batch_json = json.dumps(
-            [{"scan": name, **r.to_dict()} for name, r in results_list], indent=2
+            [{"scan": name, **r.to_dict()} for _, _, name, r, _ in sorted_items], indent=2
         )
         st.download_button(
-            "📄 Download All Results (JSON)",
+            "Download All Results (JSON)",
             data=batch_json,
             file_name="stroke_x_batch_results.json",
             mime="application/json",
             use_container_width=True,
         )
 
-    st.divider()
-
-    # Interactive Case Inspector for Batch Results
-    st.markdown("### 🔍 Inspect Individual Scan")
-    ordered_names = df_display["Scan"].tolist()
-    result_map = dict(results_list)
-    chosen_case = st.selectbox("Select a scan from the batch to view details", ordered_names)
-    if chosen_case:
-        render_single_result(chosen_case, result_map[chosen_case])
+    # Render ALL Batch Outputs directly
+    st.markdown("### All Scan Results")
+    for idx, (_, _, case_name, res, _) in enumerate(sorted_items):
+        if idx > 0:
+            st.markdown('<div class="case-divider"></div>', unsafe_allow_html=True)
+        render_single_result(case_name, res, key_prefix=f"batch_{idx}", expanded_recs=False)
