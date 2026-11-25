@@ -332,34 +332,18 @@ def extract_scans_from_uploads(uploaded_items) -> list[tuple[str, bytes]]:
 
 
 # ------------------------------------------------------------
-# 3. Sidebar: Upload (Single, Multi-File, Multi-Folder, ZIP)
+# 3. Sidebar: Upload (Folders, Files, or ZIP - Automatic)
 # ------------------------------------------------------------
 st.sidebar.markdown("### Stroke-X Controls")
-st.sidebar.caption("Upload individual scans, ZIP archives, or entire folders.")
+st.sidebar.caption("Drop files, ZIPs, or folders below (click Browse to select a folder).")
 
-upload_mode = st.sidebar.radio(
-    "Upload Mode",
-    ["Folders", "Files / ZIP"],
-    horizontal=True,
+uploaded_files = st.sidebar.file_uploader(
+    "Upload CTA Scan(s) or Folder(s)",
+    type=["jpeg", "jpg", "png", "bmp", "tiff", "tif", "zip"],
+    accept_multiple_files="directory",
+    key="unified_uploader",
+    help="Select a folder via Browse (click Browse again to add more folders), or drag and drop files/folders/ZIPs.",
 )
-
-if upload_mode == "Folders":
-    uploaded_files = st.sidebar.file_uploader(
-        "Select Folder(s) of CTA Scans",
-        type=["jpeg", "jpg", "png", "bmp", "tiff", "tif"],
-        accept_multiple_files="directory",
-        key="folder_uploader",
-        help="Select a folder (or click Browse multiple times to add multiple folders).",
-    )
-    st.sidebar.caption("Tip: Click Browse again to add more folders.")
-else:
-    uploaded_files = st.sidebar.file_uploader(
-        "Upload CTA Scan(s) or ZIP",
-        type=["jpeg", "jpg", "png", "bmp", "tiff", "tif", "zip"],
-        accept_multiple_files=True,
-        key="file_uploader",
-        help="Upload 1 or more images, or a .zip archive containing multiple folders.",
-    )
 
 st.sidebar.markdown("---")
 show_mask = st.sidebar.toggle(
