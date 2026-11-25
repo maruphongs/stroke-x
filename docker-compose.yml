@@ -1,0 +1,18 @@
+services:
+  stroke-x:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stroke-x-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount model weights from host into container
+      - ./best_model.pt:/app/best_model.pt:ro
+      - ./fov_model.pt:/app/fov_model.pt:ro
+      # Optional: Mount local test scans or reports directory
+      - ./data:/app/data:ro
+      - ./reports:/app/reports
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
