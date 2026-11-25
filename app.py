@@ -1,10 +1,9 @@
 """
 Stroke-X: Brain CTA Stroke Triage Dashboard
-Clean, color-coded clinical UI supporting single and full-output batch analysis.
+Clean, color-coded clinical UI supporting single and full-output batch upload.
 """
 
 import json
-import os
 import time
 
 import cv2
@@ -141,30 +140,22 @@ st.markdown(
 
 
 # ------------------------------------------------------------
-# 2. Helpers
+# 2. Helpers & Cached Inference
 # ------------------------------------------------------------
-@st.cache_data
-def get_sample_scans(data_dir: str = "data/test") -> dict:
-    samples = {}
-    if not os.path.exists(data_dir):
-        return samples
-
-    valid_exts = {".jpeg", ".jpg", ".png", ".bmp", ".tif", ".tiff"}
-    for root, _, files in os.walk(data_dir):
-        for f in files:
-            if os.path.splitext(f)[1].lower() in valid_exts:
-                path = os.path.join(root, f)
-                stem = os.path.splitext(f)[0]
-                tag = "Normal" if stem.lower().startswith("n") else "Stroke"
-                samples[f"{f} ({tag})"] = path
-
-    def sort_key(item):
-        k = item[0].lower()
-        prefix = "0" if k.startswith("n") else "1"
-        num = "".join([c for c in k if c.isdigit()])
-        return (prefix, int(num) if num else 0)
-
-    return dict(sorted(samples.items(), key=sort_key))
+@st.cache_data(show_spinner=False)
+def analyze_cached(
+    image_bytes: bytes,
+    case_name: str,
+    asym_threshold: float,
+    bbox_threshold: float,
+) -> StrokeAnalysisResult:
+    return run_stroke_pipeline(
+        image_input=image_bytes,
+        case_name=case_name,
+        asym_threshold=asym_threshold,
+        bbox_threshold=bbox_threshold,
+        generate_composite=False,
+    )
 
 
 def bgr_to_rgb(img_bgr: np.ndarray) -> np.ndarray:
@@ -189,7 +180,13 @@ def render_metric_card(col, label: str, value: str, accent: str = ""):
     )
 
 
-def render_single_result(case_name: str, result: StrokeAnalysisResult, key_prefix: str = "single", expanded_recs: bool = True):
+def render_single_result(
+    case_name: str,
+    result: StrokeAnalysisResult,
+    show_mask: bool = True,
+    key_prefix: str = "single",
+    expanded_recs: bool = True,
+):
     """Renders a clean, color-coded diagnostic view for one scan."""
     if not result.success:
         st.error(f"Could not analyze {case_name}: {result.error}")
@@ -229,22 +226,27 @@ def render_single_result(case_name: str, result: StrokeAnalysisResult, key_prefi
             unsafe_allow_html=True,
         )
 
-    # 2. Color-coded Key Metrics
-    c1, c2, c3 = st.columns(3)
-    render_metric_card(c1, "AI Stroke Risk Score", f"{result.snn_prob * 100:.1f}%", accent)
+    # 2. Color-coded Key Metrics (SNN Score & Affected Hemisphere)
+    c1, c2 = st.columns(2)
+    render_metric_card(c1, "SNN Score", f"{result.snn_prob * 100:.1f}%", accent)
     render_metric_card(c2, "Affected Hemisphere", result.affected_side, accent)
-    render_metric_card(c3, "Highlighted Deficit Areas", str(len(result.bounding_boxes)), accent)
 
-    # 3. Side-by-Side Visual Comparison (Original vs Red Mask Result)
+    # 3. Side-by-Side Visual Comparison (Original vs Aligned / Diagnostic Mask)
     img_col1, img_col2 = st.columns(2)
     with img_col1:
         st.markdown("**Original CTA Scan**")
         if result.original_image is not None:
             st.image(bgr_to_rgb(result.original_image), use_container_width=True)
     with img_col2:
-        st.markdown("**AI Result (Red Deficit Highlight)**")
-        if result.diagnostic_overlay is not None:
-            st.image(bgr_to_rgb(result.diagnostic_overlay), use_container_width=True)
+        if show_mask:
+            st.markdown("**Diagnostic Result (Red Deficit Mask)**")
+            display_img = result.diagnostic_overlay
+        else:
+            st.markdown("**Aligned Scan (Mask Off)**")
+            display_img = result.aligned_image if result.aligned_image is not None else result.diagnostic_overlay
+
+        if display_img is not None:
+            st.image(bgr_to_rgb(display_img), use_container_width=True)
 
     # 4. Clinical Guidance & Exports
     with st.expander(f"Clinical Guidance & Export — {case_name}", expanded=expanded_recs):
@@ -254,8 +256,11 @@ def render_single_result(case_name: str, result: StrokeAnalysisResult, key_prefi
         st.markdown("---")
         dl1, dl2, dl3 = st.columns(3)
         with dl1:
-            if result.diagnostic_overlay is not None:
-                _, enc_img = cv2.imencode(".png", result.diagnostic_overlay)
+            export_img = result.diagnostic_overlay if show_mask else (
+                result.aligned_image if result.aligned_image is not None else result.diagnostic_overlay
+            )
+            if export_img is not None:
+                _, enc_img = cv2.imencode(".png", export_img)
                 st.download_button(
                     "Download Result Image (PNG)",
                     data=enc_img.tobytes(),
@@ -286,7 +291,7 @@ def render_single_result(case_name: str, result: StrokeAnalysisResult, key_prefi
 
 
 # ------------------------------------------------------------
-# 3. Sidebar: Upload (Single or Batch) & Settings
+# 3. Sidebar: Upload (Single or Batch) & View Controls
 # ------------------------------------------------------------
 st.sidebar.markdown("### Stroke-X Controls")
 st.sidebar.caption("Upload one scan for single review, or multiple scans for batch triage.")
@@ -297,33 +302,23 @@ uploaded_files = st.sidebar.file_uploader(
     accept_multiple_files=True,
 )
 
-sample_dict = get_sample_scans()
-selected_samples = []
-if sample_dict and not uploaded_files:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Sample Cohort Scans**")
-    run_all_samples = st.sidebar.checkbox("Select all sample scans (Batch)", value=False)
-    if run_all_samples:
-        selected_samples = list(sample_dict.keys())
-        st.sidebar.info(f"Selected all {len(selected_samples)} sample scans.")
-    else:
-        default_sample = [list(sample_dict.keys())[0]]
-        selected_samples = st.sidebar.multiselect(
-            "Choose 1 or more samples",
-            options=list(sample_dict.keys()),
-            default=default_sample,
-        )
+st.sidebar.markdown("---")
+show_mask = st.sidebar.toggle(
+    "Show Red Deficit Mask",
+    value=True,
+    help="Toggle between Diagnostic Result (with red mask) and clean Aligned Scan.",
+)
 
 with st.sidebar.expander("Advanced Settings", expanded=False):
     asym_threshold = st.slider(
-        "Stroke Sensitivity Cutoff (%)",
+        "SNN Cutoff (%)",
         min_value=20.0,
         max_value=80.0,
         value=50.0,
         step=1.0,
     )
     bbox_threshold = st.slider(
-        "Deficit Highlight Threshold (%)",
+        "Deficit Threshold (%)",
         min_value=50.0,
         max_value=95.0,
         value=85.0,
@@ -344,34 +339,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Build queue
-scan_queue = []
-if uploaded_files:
-    for uf in uploaded_files:
-        scan_queue.append((uf.name, uf.getvalue()))
-elif selected_samples:
-    for key in selected_samples:
-        case_name = key.split(" ")[0]
-        scan_queue.append((case_name, sample_dict[key]))
-
-if not scan_queue:
-    st.info("Upload one or more CTA scan images in the sidebar (or choose sample scans) to start.")
+if not uploaded_files:
+    st.info("Upload one or more CTA scan images in the sidebar to begin analysis.")
     st.stop()
 
+scan_queue = [(uf.name, uf.getvalue()) for uf in uploaded_files]
 total_scans = len(scan_queue)
 
 # --- SINGLE MODE ---
 if total_scans == 1:
-    case_name, img_data = scan_queue[0]
+    case_name, img_bytes = scan_queue[0]
     with st.spinner(f"Analyzing {case_name}..."):
-        res = run_stroke_pipeline(
-            image_input=img_data,
-            case_name=case_name,
-            asym_threshold=asym_threshold,
-            bbox_threshold=bbox_threshold,
-            generate_composite=False,
-        )
-    render_single_result(case_name, res, key_prefix="single_0", expanded_recs=True)
+        res = analyze_cached(img_bytes, case_name, asym_threshold, bbox_threshold)
+    render_single_result(case_name, res, show_mask=show_mask, key_prefix="single_0", expanded_recs=True)
 
 # --- BATCH MODE (SHOWS ALL OUTPUTS) ---
 else:
@@ -379,18 +359,12 @@ else:
     t_batch_start = time.time()
     results_list = []
 
-    for idx, (case_name, img_data) in enumerate(scan_queue):
+    for idx, (case_name, img_bytes) in enumerate(scan_queue):
         progress_bar.progress(
             idx / total_scans,
             text=f"Analyzing scan {idx + 1} of {total_scans}: {case_name}...",
         )
-        res = run_stroke_pipeline(
-            image_input=img_data,
-            case_name=case_name,
-            asym_threshold=asym_threshold,
-            bbox_threshold=bbox_threshold,
-            generate_composite=False,
-        )
+        res = analyze_cached(img_bytes, case_name, asym_threshold, bbox_threshold)
         results_list.append((case_name, res))
 
     progress_bar.progress(1.0, text=f"Completed {total_scans} scans")
@@ -411,8 +385,7 @@ else:
     if failed_count > 0:
         st.warning(f"{failed_count} scan(s) could not be processed.")
 
-    # Build Sorted Summary Table (Flagged cases first, highest risk at top)
-    table_rows = []
+    # Build Sorted Summary Table (Flagged cases first, highest SNN score at top)
     sorted_items = []
     for case_name, r in results_list:
         if r.success:
@@ -422,8 +395,7 @@ else:
                 "Scan": case_name,
                 "Status": status_str,
                 "Affected Side": r.affected_side,
-                "Stroke Risk (%)": round(r.snn_prob * 100, 1),
-                "Deficit Areas": len(r.bounding_boxes),
+                "SNN Score (%)": round(r.snn_prob * 100, 1),
                 "Time (s)": round(r.execution_time_sec, 2),
             }
             sorted_items.append((priority, -(r.snn_prob * 100), case_name, r, row))
@@ -432,8 +404,7 @@ else:
                 "Scan": case_name,
                 "Status": "ERROR",
                 "Affected Side": "-",
-                "Stroke Risk (%)": 0.0,
-                "Deficit Areas": 0,
+                "SNN Score (%)": 0.0,
                 "Time (s)": round(r.execution_time_sec, 2),
             }
             sorted_items.append((2, 0.0, case_name, r, row))
@@ -481,4 +452,10 @@ else:
     for idx, (_, _, case_name, res, _) in enumerate(sorted_items):
         if idx > 0:
             st.markdown('<div class="case-divider"></div>', unsafe_allow_html=True)
-        render_single_result(case_name, res, key_prefix=f"batch_{idx}", expanded_recs=False)
+        render_single_result(
+            case_name,
+            res,
+            show_mask=show_mask,
+            key_prefix=f"batch_{idx}",
+            expanded_recs=False,
+        )
