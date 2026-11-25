@@ -19,6 +19,23 @@ from report import generate_dashboard_image
 from snn_ai import Config as SNNConfig, load_snn_model, predict_snn
 
 
+def _to_json_safe(obj: Any) -> Any:
+    """Recursively converts NumPy scalars/arrays to native Python JSON-serializable types."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {str(k): _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(v) for v in obj]
+    return obj
+
+
 @dataclass
 class StrokeAnalysisResult:
     success: bool
@@ -51,16 +68,16 @@ class StrokeAnalysisResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Returns JSON-serializable summary (excluding heavy numpy arrays)."""
-        return {
+        payload = {
             "success": self.success,
             "error": self.error,
-            "execution_time_sec": round(self.execution_time_sec, 3),
+            "execution_time_sec": round(float(self.execution_time_sec), 3),
             "fov": {
                 "type": self.fov_type,
-                "confidence": round(self.fov_conf, 4),
+                "confidence": round(float(self.fov_conf), 4),
             },
             "radiological": {
-                "snn_probability": round(self.snn_prob, 4),
+                "snn_probability": round(float(self.snn_prob), 4),
                 "snn_class": self.snn_class,
                 "affected_side": self.affected_side,
                 "verdict": self.verdict,
@@ -71,12 +88,13 @@ class StrokeAnalysisResult:
             "arc_profile": self.arc_profile,
             "recommendations": self.recommendations,
             "alignment": {
-                "tilt_angle_deg": round(self.meta.get("angle", 0.0), 2),
+                "tilt_angle_deg": round(float(self.meta.get("angle", 0.0)), 2),
                 "center_x": self.meta.get("cx"),
                 "center_y": self.meta.get("cy"),
                 "chest_cut_row": self.meta.get("chest_y"),
             },
         }
+        return _to_json_safe(payload)
 
 
 # Global model cache to avoid reloading weights per inference call
