@@ -117,6 +117,7 @@ def run_stroke_pipeline(
     asym_threshold: float = 50.0,
     bbox_threshold: float = 85.0,
     save_dashboard_to_disk: bool = False,
+    generate_composite: bool = False,
     output_dir: str = "reports",
 ) -> StrokeAnalysisResult:
     """
@@ -241,9 +242,9 @@ def run_stroke_pipeline(
             "4. Follow-up imaging (MRI Brain with DWI) suggested if focal clinical deficit persists.",
         ]
 
-    # 8. Render Composite Infographic Dashboard
+    # 8. Render Composite Infographic Dashboard (only if requested)
     composite_canvas = None
-    if save_dashboard_to_disk or True:
+    if save_dashboard_to_disk or generate_composite:
         try:
             findings_dict = {
                 "affected_side": affected_side,
