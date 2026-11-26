@@ -18,8 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy active application source code & Streamlit config
+# Copy active application source code, assets & Streamlit config
 COPY .streamlit/ /app/.streamlit/
+COPY assets/ /app/assets/
 COPY app.py /app/
 COPY engine.py /app/
 COPY exporter.py /app/

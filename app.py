@@ -22,56 +22,78 @@ from exporter import generate_clinical_html_report
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Early Ischemic Stroke Detection in CT Angiography Images using Image Processing",
+    page_icon="assets/icon.svg",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+st.logo("assets/logo.svg", icon_image="assets/icon.svg", size="large")
 
 st.markdown(
     """
     <style>
     .app-banner {
-        background: linear-gradient(90deg, #0f172a 0%, #1e3a8a 100%);
+        background: radial-gradient(circle at 92% 15%, rgba(56, 189, 248, 0.22) 0%, transparent 45%),
+                    linear-gradient(120deg, #0f172a 0%, #0c4a6e 60%, #0369a1 100%);
         color: #ffffff;
-        padding: 18px 24px;
-        border-radius: 10px;
-        margin-bottom: 16px;
+        padding: 22px 28px;
+        border-radius: 14px;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.25);
+        margin-bottom: 18px;
+    }
+    .app-banner-eyebrow {
+        display: inline-block;
+        background: rgba(56, 189, 248, 0.16);
+        color: #7dd3fc;
+        border: 1px solid rgba(125, 211, 252, 0.35);
+        border-radius: 9999px;
+        padding: 3px 11px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
     }
     .app-banner h1 {
         color: #ffffff;
         font-size: 1.65rem;
         font-weight: 700;
         margin: 0;
+        line-height: 1.25;
     }
     .app-banner p {
         color: #cbd5e1;
         font-size: 0.95rem;
-        margin: 4px 0 0 0;
+        margin: 6px 0 0 0;
     }
     .verdict-box-stroke {
-        background-color: #fef2f2;
+        background: linear-gradient(90deg, #fef2f2 0%, #ffffff 100%);
         border: 1px solid #fecaca;
         border-left: 6px solid #dc2626;
-        padding: 14px 18px;
-        border-radius: 8px;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px -2px rgba(220, 38, 38, 0.08);
         margin-bottom: 14px;
     }
     .verdict-box-normal {
-        background-color: #f0fdf4;
+        background: linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%);
         border: 1px solid #bbf7d0;
         border-left: 6px solid #16a34a;
-        padding: 14px 18px;
-        border-radius: 8px;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px -2px rgba(22, 163, 74, 0.08);
         margin-bottom: 14px;
     }
     .verdict-title-stroke {
         color: #991b1b;
-        font-size: 1.2rem;
+        font-size: 1.18rem;
         font-weight: 700;
         margin: 0;
     }
     .verdict-title-normal {
         color: #166534;
-        font-size: 1.2rem;
+        font-size: 1.18rem;
         font-weight: 700;
         margin: 0;
     }
@@ -83,9 +105,10 @@ st.markdown(
     .metric-card {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
-        border-top: 4px solid #3b82f6;
-        border-radius: 8px;
-        padding: 12px 16px;
+        border-top: 4px solid #0284c7;
+        border-radius: 10px;
+        padding: 14px 18px;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
         margin-bottom: 12px;
     }
     .metric-card.red {
@@ -97,18 +120,18 @@ st.markdown(
         background-color: #f9fefb;
     }
     .metric-card.slate {
-        border-top-color: #475569;
+        border-top-color: #334155;
     }
     .metric-label {
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.05em;
         color: #64748b;
         margin-bottom: 4px;
     }
     .metric-value {
-        font-size: 1.55rem;
+        font-size: 1.6rem;
         font-weight: 700;
         color: #0f172a;
     }
@@ -118,9 +141,9 @@ st.markdown(
         display: inline-block;
         padding: 3px 10px;
         border-radius: 9999px;
-        font-size: 0.75rem;
+        font-size: 0.74rem;
         font-weight: 700;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.04em;
     }
     .pill-red {
         background-color: #fee2e2;
@@ -134,18 +157,18 @@ st.markdown(
     }
     .step-badge {
         display: inline-block;
-        background-color: #eff6ff;
-        color: #1d4ed8;
-        border: 1px solid #bfdbfe;
+        background-color: #e0f2fe;
+        color: #0369a1;
+        border: 1px solid #bae6fd;
         border-radius: 9999px;
         padding: 2px 10px;
-        font-size: 0.75rem;
+        font-size: 0.74rem;
         font-weight: 700;
         margin-bottom: 8px;
     }
     .case-divider {
         border-top: 2px solid #e2e8f0;
-        margin: 24px 0 20px 0;
+        margin: 26px 0 22px 0;
     }
     </style>
     """,
@@ -243,7 +266,7 @@ def render_how_to_use():
 
     st.markdown(
         """
-        <div style="margin-top: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.88rem; color: #334155;">
+        <div style="margin-top: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.88rem; color: #334155;">
             <b>Result guide:</b> &nbsp;
             <span class="pill pill-red">ASYMMETRY DETECTED</span> SNN Score &ge; cutoff (default 50%) &mdash; possible ischemic stroke / vessel occlusion. &nbsp;&nbsp;
             <span class="pill pill-green">SYMMETRICAL SCAN</span> SNN Score &lt; cutoff &mdash; balanced bilateral vessels.
@@ -415,47 +438,56 @@ def extract_scans_from_uploads(uploaded_items) -> list[tuple[str, bytes]]:
 # ------------------------------------------------------------
 snn_ready, fov_ready = init_model_weights()
 
-st.sidebar.markdown("### Controls")
-st.sidebar.caption("Drop files, ZIPs, or folders below (click Browse to select a folder).")
+with st.sidebar:
+    st.markdown("### Controls")
+    st.caption("Drop files, ZIPs, or folders below (click Browse to select a folder).")
 
-uploaded_files = st.sidebar.file_uploader(
-    "Upload CTA scan(s) or folder(s)",
-    type=["jpeg", "jpg", "png", "bmp", "tiff", "tif", "zip"],
-    accept_multiple_files="directory",
-    key="unified_uploader",
-    help="Select a folder via Browse (click Browse again to add more folders), or drag and drop files, folders, or ZIPs.",
-)
-
-st.sidebar.divider()
-show_mask = st.sidebar.toggle(
-    "Show red deficit mask",
-    value=True,
-    key="show_mask_toggle",
-    help="Toggle between the Diagnostic Result (red highlight) and the clean Aligned Scan.",
-)
-
-with st.sidebar.expander("Advanced settings", expanded=False):
-    asym_threshold = st.slider(
-        "SNN cutoff (%)",
-        min_value=20.0,
-        max_value=80.0,
-        value=50.0,
-        step=1.0,
-        key="snn_cutoff_slider",
-    )
-    bbox_threshold = st.slider(
-        "Deficit threshold (%)",
-        min_value=50.0,
-        max_value=95.0,
-        value=85.0,
-        step=1.0,
-        key="bbox_thresh_slider",
+    uploaded_files = st.file_uploader(
+        "Upload CTA scan(s) or folder(s)",
+        type=["jpeg", "jpg", "png", "bmp", "tiff", "tif", "zip"],
+        accept_multiple_files="directory",
+        key="unified_uploader",
+        help="Select a folder via Browse (click Browse again to add more folders), or drag and drop files, folders, or ZIPs.",
     )
 
-st.sidebar.divider()
-st.sidebar.caption(
-    f"Models: SNN {'ready' if snn_ready else 'missing'} | FOV {'ready' if fov_ready else 'missing'}"
-)
+    show_mask = st.toggle(
+        "Show red deficit mask",
+        value=True,
+        key="show_mask_toggle",
+        help="Toggle between the Diagnostic Result (red highlight) and the clean Aligned Scan.",
+    )
+
+    with st.expander("Advanced settings", expanded=False, icon=":material/tune:"):
+        asym_threshold = st.slider(
+            "SNN cutoff (%)",
+            min_value=20.0,
+            max_value=80.0,
+            value=50.0,
+            step=1.0,
+            key="snn_cutoff_slider",
+        )
+        bbox_threshold = st.slider(
+            "Deficit threshold (%)",
+            min_value=50.0,
+            max_value=95.0,
+            value=85.0,
+            step=1.0,
+            key="bbox_thresh_slider",
+        )
+
+    st.space("small")
+    st.caption("Model status")
+    with st.container(horizontal=True):
+        st.badge(
+            "SNN ready" if snn_ready else "SNN missing",
+            icon=":material/check_circle:" if snn_ready else ":material/error:",
+            color="green" if snn_ready else "red",
+        )
+        st.badge(
+            "FOV ready" if fov_ready else "FOV missing",
+            icon=":material/check_circle:" if fov_ready else ":material/error:",
+            color="green" if fov_ready else "red",
+        )
 
 
 # ------------------------------------------------------------
@@ -464,6 +496,7 @@ st.sidebar.caption(
 st.markdown(
     """
     <div class="app-banner">
+        <div class="app-banner-eyebrow">Neurovascular CTA AI Screening</div>
         <h1>Early Ischemic Stroke Detection in CT Angiography Images using Image Processing</h1>
         <p>Automated Acute Ischemic Stroke &amp; Large Vessel Occlusion Screening</p>
     </div>
