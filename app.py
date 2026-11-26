@@ -22,33 +22,32 @@ from exporter import generate_clinical_html_report
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Early Ischemic Stroke Detection in CT Angiography Images using Image Processing",
-    page_icon="assets/icon.svg",
+    page_icon="assets/icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.logo("assets/logo.svg", icon_image="assets/icon.svg", size="large")
+st.logo("assets/icon.png", icon_image="assets/icon.png", size="large")
 
 st.markdown(
     """
     <style>
     .app-banner {
-        background: radial-gradient(circle at 92% 15%, rgba(56, 189, 248, 0.22) 0%, transparent 45%),
-                    linear-gradient(120deg, #0f172a 0%, #0c4a6e 60%, #0369a1 100%);
-        color: #ffffff;
-        padding: 22px 28px;
-        border-radius: 14px;
-        border: 1px solid rgba(56, 189, 248, 0.25);
-        box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.25);
+        background-color: #111827;
+        color: #f9fafb;
+        padding: 20px 26px;
+        border-radius: 4px;
+        border: 1px solid #1f2937;
+        border-left: 5px solid #14b8a6;
         margin-bottom: 18px;
     }
     .app-banner-eyebrow {
         display: inline-block;
-        background: rgba(56, 189, 248, 0.16);
-        color: #7dd3fc;
-        border: 1px solid rgba(125, 211, 252, 0.35);
-        border-radius: 9999px;
-        padding: 3px 11px;
+        background-color: #1f2937;
+        color: #5eead4;
+        border: 1px solid #374151;
+        border-radius: 3px;
+        padding: 2px 9px;
         font-size: 0.72rem;
         font-weight: 700;
         letter-spacing: 0.08em;
@@ -56,59 +55,56 @@ st.markdown(
         margin-bottom: 8px;
     }
     .app-banner h1 {
-        color: #ffffff;
-        font-size: 1.65rem;
+        color: #f9fafb;
+        font-size: 1.6rem;
         font-weight: 700;
         margin: 0;
         line-height: 1.25;
     }
     .app-banner p {
-        color: #cbd5e1;
-        font-size: 0.95rem;
+        color: #9ca3af;
+        font-size: 0.94rem;
         margin: 6px 0 0 0;
     }
     .verdict-box-stroke {
-        background: linear-gradient(90deg, #fef2f2 0%, #ffffff 100%);
+        background-color: #fef2f2;
         border: 1px solid #fecaca;
-        border-left: 6px solid #dc2626;
-        padding: 15px 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px -2px rgba(220, 38, 38, 0.08);
+        border-left: 5px solid #dc2626;
+        padding: 14px 18px;
+        border-radius: 4px;
         margin-bottom: 14px;
     }
     .verdict-box-normal {
-        background: linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%);
+        background-color: #f0fdf4;
         border: 1px solid #bbf7d0;
-        border-left: 6px solid #16a34a;
-        padding: 15px 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px -2px rgba(22, 163, 74, 0.08);
+        border-left: 5px solid #15803d;
+        padding: 14px 18px;
+        border-radius: 4px;
         margin-bottom: 14px;
     }
     .verdict-title-stroke {
         color: #991b1b;
-        font-size: 1.18rem;
+        font-size: 1.15rem;
         font-weight: 700;
         margin: 0;
     }
     .verdict-title-normal {
         color: #166534;
-        font-size: 1.18rem;
+        font-size: 1.15rem;
         font-weight: 700;
         margin: 0;
     }
     .verdict-sub {
-        color: #475569;
+        color: #4b5563;
         font-size: 0.9rem;
         margin-top: 4px;
     }
     .metric-card {
         background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-top: 4px solid #0284c7;
-        border-radius: 10px;
+        border: 1px solid #d1d5db;
+        border-top: 3px solid #0f766e;
+        border-radius: 4px;
         padding: 14px 18px;
-        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
         margin-bottom: 12px;
     }
     .metric-card.red {
@@ -116,31 +112,31 @@ st.markdown(
         background-color: #fffafa;
     }
     .metric-card.green {
-        border-top-color: #16a34a;
+        border-top-color: #15803d;
         background-color: #f9fefb;
     }
     .metric-card.slate {
-        border-top-color: #334155;
+        border-top-color: #374151;
     }
     .metric-label {
-        font-size: 0.76rem;
+        font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #64748b;
+        color: #6b7280;
         margin-bottom: 4px;
     }
     .metric-value {
         font-size: 1.6rem;
         font-weight: 700;
-        color: #0f172a;
+        color: #111827;
     }
     .metric-value.red { color: #b91c1c; }
     .metric-value.green { color: #15803d; }
     .pill {
         display: inline-block;
-        padding: 3px 10px;
-        border-radius: 9999px;
+        padding: 2px 9px;
+        border-radius: 3px;
         font-size: 0.74rem;
         font-weight: 700;
         letter-spacing: 0.04em;
@@ -148,27 +144,27 @@ st.markdown(
     .pill-red {
         background-color: #fee2e2;
         color: #991b1b;
-        border: 1px solid #f87171;
+        border: 1px solid #fca5a5;
     }
     .pill-green {
         background-color: #dcfce7;
         color: #166534;
-        border: 1px solid #4ade80;
+        border: 1px solid #86efac;
     }
     .step-badge {
         display: inline-block;
-        background-color: #e0f2fe;
-        color: #0369a1;
-        border: 1px solid #bae6fd;
-        border-radius: 9999px;
-        padding: 2px 10px;
+        background-color: #f0fdfa;
+        color: #0f766e;
+        border: 1px solid #99f6e4;
+        border-radius: 3px;
+        padding: 2px 9px;
         font-size: 0.74rem;
         font-weight: 700;
         margin-bottom: 8px;
     }
     .case-divider {
-        border-top: 2px solid #e2e8f0;
-        margin: 26px 0 22px 0;
+        border-top: 1px solid #d1d5db;
+        margin: 24px 0 20px 0;
     }
     </style>
     """,
@@ -266,7 +262,7 @@ def render_how_to_use():
 
     st.markdown(
         """
-        <div style="margin-top: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.88rem; color: #334155;">
+        <div style="margin-top: 8px; padding: 10px 14px; background: #ffffff; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.88rem; color: #374151;">
             <b>Result guide:</b> &nbsp;
             <span class="pill pill-red">ASYMMETRY DETECTED</span> SNN Score &ge; cutoff (default 50%) &mdash; possible ischemic stroke / vessel occlusion. &nbsp;&nbsp;
             <span class="pill pill-green">SYMMETRICAL SCAN</span> SNN Score &lt; cutoff &mdash; balanced bilateral vessels.

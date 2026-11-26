@@ -41,6 +41,7 @@ cache_snn/
 *.jpeg
 *.jpg
 *.png
+!assets/*.png
 *.tiff
 *.tif
 *.bmp
