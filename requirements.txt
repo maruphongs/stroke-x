@@ -1,8 +1,9 @@
 numpy
-opencv-python
+opencv-python-headless
+pandas
+pillow
 scikit-image
+scipy
+streamlit>=1.50.0
 torch
 torchvision
-matplotlib
-scikit-learn
-streamlit

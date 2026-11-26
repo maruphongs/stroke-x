@@ -5,6 +5,7 @@ Decoupled API service for web dashboards, REST APIs, and automated pipelines.
 
 import os
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -13,10 +14,10 @@ import numpy as np
 import torch
 
 from analyze import calculate_asymmetry
-from fov_ai import classify_fov, get_fov_model, preprocess_for_fov
+from fov_ai import classify_fov
 from preprocess import process_image
-from report import generate_dashboard_image
-from snn_ai import Config as SNNConfig, load_snn_model, predict_snn
+from snn_ai import Config as SNNConfig
+from snn_ai import load_snn_model, predict_snn
 
 
 def _to_json_safe(obj: Any) -> Any:
@@ -98,22 +99,64 @@ class StrokeAnalysisResult:
 
 
 # Global model cache to avoid reloading weights per inference call
-_CACHED_SNN_MODEL = None
-_CACHED_FOV_MODEL = None
+_CACHED_SNN_BUNDLE = None
+
+
+def _download_file(url: str, dest_path: str) -> bool:
+    """Downloads a file atomically from url to dest_path."""
+    tmp_path = f"{dest_path}.download"
+    try:
+        urllib.request.urlretrieve(url, tmp_path)
+        os.replace(tmp_path, dest_path)
+        return True
+    except Exception as e:
+        print(f"[!] Failed to download {url}: {e}")
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
+def ensure_model_weights(
+    snn_weights_path: str = SNNConfig.MODEL_SAVE_PATH,
+    fov_weights_path: str = "fov_model.pt",
+    snn_url: Optional[str] = None,
+    fov_url: Optional[str] = None,
+) -> Tuple[bool, bool]:
+    """
+    Ensures model checkpoints exist on disk, optionally downloading them from
+    SNN_MODEL_URL / FOV_MODEL_URL (env vars or arguments) for cloud deployments.
+    Returns (snn_available, fov_available).
+    """
+    snn_url = snn_url or os.getenv("SNN_MODEL_URL")
+    fov_url = fov_url or os.getenv("FOV_MODEL_URL")
+
+    if not os.path.exists(snn_weights_path) and snn_url:
+        _download_file(snn_url, snn_weights_path)
+    if not os.path.exists(fov_weights_path) and fov_url:
+        _download_file(fov_url, fov_weights_path)
+
+    return os.path.exists(snn_weights_path), os.path.exists(fov_weights_path)
 
 
 def get_cached_snn_model(weights_path: str = SNNConfig.MODEL_SAVE_PATH):
-    global _CACHED_SNN_MODEL
-    if _CACHED_SNN_MODEL is None and os.path.exists(weights_path):
+    global _CACHED_SNN_BUNDLE
+    if _CACHED_SNN_BUNDLE is None and os.path.exists(weights_path):
         try:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            _CACHED_SNN_MODEL = load_snn_model(weights_path, device=device)
+            model, device = load_snn_model(weights_path, device=device)
+            if model is not None:
+                _CACHED_SNN_BUNDLE = (model, device)
         except Exception as e:
             print(f"[!] Warning: Could not cache SNN model: {e}")
-    return _CACHED_SNN_MODEL
+    return _CACHED_SNN_BUNDLE
 
 
-def load_image_input(image_input: Union[str, bytes, np.ndarray]) -> Optional[np.ndarray]:
+def load_image_input(
+    image_input: Union[str, bytes, np.ndarray],
+) -> Optional[np.ndarray]:
     """Helper to convert various input types into a valid BGR numpy array."""
     if isinstance(image_input, np.ndarray):
         return image_input.copy()
@@ -186,14 +229,21 @@ def run_stroke_pipeline(
             execution_time_sec=time.time() - start_time,
         )
 
-    left_tensor, right_tensor, left_high_res, right_high_res, original_aligned = prep_res
+    left_tensor, right_tensor, left_high_res, right_high_res, original_aligned = (
+        prep_res
+    )
     meta = getattr(prep_res, "meta", {})
 
     # 4. SNN Inference (ResNet-18 Hemispheric Contrastive Model)
     snn_prob = 0.0
     if os.path.exists(snn_weights_path):
         try:
-            prob = predict_snn(left_tensor, right_tensor, weights_path=snn_weights_path)
+            cached = get_cached_snn_model(snn_weights_path)
+            if cached is not None:
+                snn_model, snn_device = cached
+                prob = predict_snn(left_tensor, right_tensor, model=snn_model, device=snn_device)
+            else:
+                prob = predict_snn(left_tensor, right_tensor, weights_path=snn_weights_path)
             snn_prob = float(prob) if prob is not None else 0.0
         except Exception as e:
             print(f"[!] SNN prediction failed: {e}")
@@ -227,7 +277,7 @@ def run_stroke_pipeline(
                 affected_side = "BILATERAL"
 
     # 7. Formulate Clinical Verdict & Clinical Guidance
-    has_deficit = (snn_class == "STROKE")
+    has_deficit = snn_class == "STROKE"
     if has_deficit:
         if affected_side in ("LEFT", "RIGHT"):
             verdict = f"ASYMMETRY DETECTED: {affected_side} HEMISPHERE"
@@ -238,9 +288,7 @@ def run_stroke_pipeline(
     else:
         verdict = "SYMMETRICAL SCAN: NEGATIVE FOR SIGNIFICANT DEFICIT"
 
-    sub_banner = (
-        f"Deficit Side: {affected_side} | SNN Prediction: {snn_class} ({snn_prob*100:.1f}% asym)"
-    )
+    sub_banner = f"Deficit Side: {affected_side} | SNN Prediction: {snn_class} ({snn_prob * 100:.1f}% asym)"
 
     # Clinical recommendations
     bounding_boxes = getattr(debug_dash, "bounding_boxes", []) or []
@@ -264,6 +312,8 @@ def run_stroke_pipeline(
     composite_canvas = None
     if save_dashboard_to_disk or generate_composite:
         try:
+            from report import generate_dashboard_image
+
             findings_dict = {
                 "affected_side": affected_side,
                 "snn_prob": snn_prob,

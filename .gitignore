@@ -4,9 +4,6 @@ __pycache__/
 *$py.class
 *.so
 
-# C extensions
-*.so
-
 # Distribution / packaging
 .Python
 build/
@@ -33,6 +30,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Secrets & Local Config
+.env
+.streamlit/secrets.toml
+
 # Clinical & Test Datasets (Scans, DICOM, Slices)
 data/
 cache_snn/
@@ -43,20 +44,34 @@ cache_snn/
 *.tiff
 *.tif
 *.bmp
+*.csv
+*.zip
 
-# Output Reports and Cache
+# Output Reports, Scratch & Backups
 reports/
 scratch/
 .old/
 *.log
 *.tmp
+*.download
 
-# Model Checkpoints & Weights (Code-only repo; host via Releases/LFS/HF)
+# Model Checkpoints & Weights (Code-only repo; host via GitHub Releases / HF Spaces)
 *.pt
 *.pth
 *.bin
 *.onnx
 *.weights
+
+# Legacy CLI / Local-Only Experiment & Benchmark Scripts (unused by deployed web app)
+links.txt
+survey.py
+report.py
+report_windowed.py
+interface.py
+test.py
+evaluate.py
+run_snn_comparison.py
+snn_comparison/
 
 # IDE & OS files
 .vscode/
