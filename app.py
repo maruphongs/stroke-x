@@ -29,143 +29,220 @@ st.set_page_config(
 
 st.logo("assets/icon.png", icon_image="assets/icon.png", size="large")
 
+is_dark_theme = getattr(getattr(st, "context", None), "theme", None) is not None and (
+    st.context.theme.type == "dark"
+)
+
+if is_dark_theme:
+    _theme_vars = {
+        "banner_bg": "#111827",
+        "banner_border": "#1e293b",
+        "banner_accent": "#3b82f6",
+        "banner_title": "#f8fafc",
+        "banner_sub": "#94a3b8",
+        "card_bg": "#111827",
+        "card_border": "#1f2937",
+        "card_red_bg": "#1f1215",
+        "card_green_bg": "#0f1f16",
+        "accent_blue": "#3b82f6",
+        "accent_slate": "#64748b",
+        "label_color": "#94a3b8",
+        "value_color": "#f8fafc",
+        "value_red": "#f87171",
+        "value_green": "#4ade80",
+        "verdict_red_bg": "#281216",
+        "verdict_red_border": "#7f1d1d",
+        "verdict_red_title": "#fca5a5",
+        "verdict_green_bg": "#0f2418",
+        "verdict_green_border": "#14532d",
+        "verdict_green_title": "#86efac",
+        "verdict_sub": "#cbd5e1",
+        "pill_red_bg": "#450a0a",
+        "pill_red_text": "#fca5a5",
+        "pill_red_border": "#991b1b",
+        "pill_green_bg": "#052e16",
+        "pill_green_text": "#86efac",
+        "pill_green_border": "#166534",
+        "step_bg": "#172554",
+        "step_text": "#93c5fd",
+        "step_border": "#1d4ed8",
+        "guide_bg": "#111827",
+        "guide_border": "#1f2937",
+        "guide_text": "#cbd5e1",
+        "divider": "#1f2937",
+    }
+else:
+    _theme_vars = {
+        "banner_bg": "#0f172a",
+        "banner_border": "#1e293b",
+        "banner_accent": "#2563eb",
+        "banner_title": "#f8fafc",
+        "banner_sub": "#cbd5e1",
+        "card_bg": "#ffffff",
+        "card_border": "#cbd5e1",
+        "card_red_bg": "#fffafa",
+        "card_green_bg": "#f9fefb",
+        "accent_blue": "#1d4ed8",
+        "accent_slate": "#475569",
+        "label_color": "#64748b",
+        "value_color": "#0f172a",
+        "value_red": "#b91c1c",
+        "value_green": "#15803d",
+        "verdict_red_bg": "#fef2f2",
+        "verdict_red_border": "#fecaca",
+        "verdict_red_title": "#991b1b",
+        "verdict_green_bg": "#f0fdf4",
+        "verdict_green_border": "#bbf7d0",
+        "verdict_green_title": "#166534",
+        "verdict_sub": "#475569",
+        "pill_red_bg": "#fee2e2",
+        "pill_red_text": "#991b1b",
+        "pill_red_border": "#fca5a5",
+        "pill_green_bg": "#dcfce7",
+        "pill_green_text": "#166534",
+        "pill_green_border": "#86efac",
+        "step_bg": "#eff6ff",
+        "step_text": "#1d4ed8",
+        "step_border": "#bfdbfe",
+        "guide_bg": "#ffffff",
+        "guide_border": "#cbd5e1",
+        "guide_text": "#334155",
+        "divider": "#cbd5e1",
+    }
+
 st.markdown(
-    """
+    f"""
     <style>
-    .app-banner {
-        background-color: #111827;
-        color: #f9fafb;
+    .app-banner {{
+        background-color: {_theme_vars["banner_bg"]};
+        color: {_theme_vars["banner_title"]};
         padding: 20px 26px;
         border-radius: 4px;
-        border: 1px solid #1f2937;
-        border-left: 5px solid #14b8a6;
+        border: 1px solid {_theme_vars["banner_border"]};
+        border-left: 5px solid {_theme_vars["banner_accent"]};
         margin-bottom: 18px;
-    }
-    .app-banner-eyebrow {
-        display: inline-block;
-        background-color: #1f2937;
-        color: #5eead4;
-        border: 1px solid #374151;
-        border-radius: 3px;
-        padding: 2px 9px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        margin-bottom: 8px;
-    }
-    .app-banner h1 {
-        color: #f9fafb;
+    }}
+    .app-banner h1 {{
+        color: {_theme_vars["banner_title"]};
         font-size: 1.6rem;
         font-weight: 700;
         margin: 0;
         line-height: 1.25;
-    }
-    .app-banner p {
-        color: #9ca3af;
+    }}
+    .app-banner p {{
+        color: {_theme_vars["banner_sub"]};
         font-size: 0.94rem;
         margin: 6px 0 0 0;
-    }
-    .verdict-box-stroke {
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
+    }}
+    .verdict-box-stroke {{
+        background-color: {_theme_vars["verdict_red_bg"]};
+        border: 1px solid {_theme_vars["verdict_red_border"]};
         border-left: 5px solid #dc2626;
         padding: 14px 18px;
         border-radius: 4px;
         margin-bottom: 14px;
-    }
-    .verdict-box-normal {
-        background-color: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        border-left: 5px solid #15803d;
+    }}
+    .verdict-box-normal {{
+        background-color: {_theme_vars["verdict_green_bg"]};
+        border: 1px solid {_theme_vars["verdict_green_border"]};
+        border-left: 5px solid #16a34a;
         padding: 14px 18px;
         border-radius: 4px;
         margin-bottom: 14px;
-    }
-    .verdict-title-stroke {
-        color: #991b1b;
+    }}
+    .verdict-title-stroke {{
+        color: {_theme_vars["verdict_red_title"]};
         font-size: 1.15rem;
         font-weight: 700;
         margin: 0;
-    }
-    .verdict-title-normal {
-        color: #166534;
+    }}
+    .verdict-title-normal {{
+        color: {_theme_vars["verdict_green_title"]};
         font-size: 1.15rem;
         font-weight: 700;
         margin: 0;
-    }
-    .verdict-sub {
-        color: #4b5563;
+    }}
+    .verdict-sub {{
+        color: {_theme_vars["verdict_sub"]};
         font-size: 0.9rem;
         margin-top: 4px;
-    }
-    .metric-card {
-        background-color: #ffffff;
-        border: 1px solid #d1d5db;
-        border-top: 3px solid #0f766e;
+    }}
+    .metric-card {{
+        background-color: {_theme_vars["card_bg"]};
+        border: 1px solid {_theme_vars["card_border"]};
+        border-top: 3px solid {_theme_vars["accent_blue"]};
         border-radius: 4px;
         padding: 14px 18px;
         margin-bottom: 12px;
-    }
-    .metric-card.red {
+    }}
+    .metric-card.red {{
         border-top-color: #dc2626;
-        background-color: #fffafa;
-    }
-    .metric-card.green {
-        border-top-color: #15803d;
-        background-color: #f9fefb;
-    }
-    .metric-card.slate {
-        border-top-color: #374151;
-    }
-    .metric-label {
+        background-color: {_theme_vars["card_red_bg"]};
+    }}
+    .metric-card.green {{
+        border-top-color: #16a34a;
+        background-color: {_theme_vars["card_green_bg"]};
+    }}
+    .metric-card.slate {{
+        border-top-color: {_theme_vars["accent_slate"]};
+    }}
+    .metric-label {{
         font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #6b7280;
+        color: {_theme_vars["label_color"]};
         margin-bottom: 4px;
-    }
-    .metric-value {
+    }}
+    .metric-value {{
         font-size: 1.6rem;
         font-weight: 700;
-        color: #111827;
-    }
-    .metric-value.red { color: #b91c1c; }
-    .metric-value.green { color: #15803d; }
-    .pill {
+        color: {_theme_vars["value_color"]};
+    }}
+    .metric-value.red {{ color: {_theme_vars["value_red"]}; }}
+    .metric-value.green {{ color: {_theme_vars["value_green"]}; }}
+    .pill {{
         display: inline-block;
         padding: 2px 9px;
         border-radius: 3px;
         font-size: 0.74rem;
         font-weight: 700;
         letter-spacing: 0.04em;
-    }
-    .pill-red {
-        background-color: #fee2e2;
-        color: #991b1b;
-        border: 1px solid #fca5a5;
-    }
-    .pill-green {
-        background-color: #dcfce7;
-        color: #166534;
-        border: 1px solid #86efac;
-    }
-    .step-badge {
+    }}
+    .pill-red {{
+        background-color: {_theme_vars["pill_red_bg"]};
+        color: {_theme_vars["pill_red_text"]};
+        border: 1px solid {_theme_vars["pill_red_border"]};
+    }}
+    .pill-green {{
+        background-color: {_theme_vars["pill_green_bg"]};
+        color: {_theme_vars["pill_green_text"]};
+        border: 1px solid {_theme_vars["pill_green_border"]};
+    }}
+    .step-badge {{
         display: inline-block;
-        background-color: #f0fdfa;
-        color: #0f766e;
-        border: 1px solid #99f6e4;
+        background-color: {_theme_vars["step_bg"]};
+        color: {_theme_vars["step_text"]};
+        border: 1px solid {_theme_vars["step_border"]};
         border-radius: 3px;
         padding: 2px 9px;
         font-size: 0.74rem;
         font-weight: 700;
         margin-bottom: 8px;
-    }
-    .case-divider {
-        border-top: 1px solid #d1d5db;
+    }}
+    .result-guide {{
+        margin-top: 8px;
+        padding: 10px 14px;
+        background-color: {_theme_vars["guide_bg"]};
+        border: 1px solid {_theme_vars["guide_border"]};
+        border-radius: 4px;
+        font-size: 0.88rem;
+        color: {_theme_vars["guide_text"]};
+    }}
+    .case-divider {{
+        border-top: 1px solid {_theme_vars["divider"]};
         margin: 24px 0 20px 0;
-    }
+    }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -262,7 +339,7 @@ def render_how_to_use():
 
     st.markdown(
         """
-        <div style="margin-top: 8px; padding: 10px 14px; background: #ffffff; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.88rem; color: #374151;">
+        <div class="result-guide">
             <b>Result guide:</b> &nbsp;
             <span class="pill pill-red">ASYMMETRY DETECTED</span> SNN Score &ge; cutoff (default 50%) &mdash; possible ischemic stroke / vessel occlusion. &nbsp;&nbsp;
             <span class="pill pill-green">SYMMETRICAL SCAN</span> SNN Score &lt; cutoff &mdash; balanced bilateral vessels.
@@ -492,7 +569,6 @@ with st.sidebar:
 st.markdown(
     """
     <div class="app-banner">
-        <div class="app-banner-eyebrow">Neurovascular CTA AI Screening</div>
         <h1>Early Ischemic Stroke Detection in CT Angiography Images using Image Processing</h1>
         <p>Automated Acute Ischemic Stroke &amp; Large Vessel Occlusion Screening</p>
     </div>
@@ -602,10 +678,22 @@ else:
 
         def style_status(val):
             if val == "STROKE RISK":
-                return "background-color: #fee2e2; color: #991b1b; font-weight: 700;"
+                return (
+                    "background-color: #450a0a; color: #fca5a5; font-weight: 700;"
+                    if is_dark_theme
+                    else "background-color: #fee2e2; color: #991b1b; font-weight: 700;"
+                )
             if val == "NORMAL":
-                return "background-color: #dcfce7; color: #166534; font-weight: 700;"
-            return "background-color: #f1f5f9; color: #475569;"
+                return (
+                    "background-color: #052e16; color: #86efac; font-weight: 700;"
+                    if is_dark_theme
+                    else "background-color: #dcfce7; color: #166534; font-weight: 700;"
+                )
+            return (
+                "background-color: #1e293b; color: #94a3b8;"
+                if is_dark_theme
+                else "background-color: #f1f5f9; color: #475569;"
+            )
 
         st.dataframe(
             df_display.style.map(style_status, subset=["Status"]),
